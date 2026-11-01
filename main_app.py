@@ -506,7 +506,7 @@ IMG_SIZE = 640
 def load_onnx_model():
     onnx_path = "best.onnx"
     if not os.path.exists(onnx_path):
-        raise FileNotFoundError("找不到 yolov10n.onnx，请确认文件在当前项目文件夹！")
+        raise FileNotFoundError("找不到 best.onnx，请确认文件在当前项目文件夹！")
     session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
     input_name = session.get_inputs()[0].name
     return session, input_name
