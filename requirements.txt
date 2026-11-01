@@ -6,3 +6,4 @@ onnxruntime
 scikit-learn
 pandas
 zhipuai
+sniffio
