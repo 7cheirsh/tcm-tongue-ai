@@ -1,7 +1,7 @@
-streamlit==1.40.2
-opencv-python-headless==4.10.0.84
-pillow==10.4.0
-numpy==1.26.4
-onnxruntime==1.18.1
-scikit-learn==1.5.1
-pandas==2.2.2
+streamlit
+opencv-python-headless
+pillow
+numpy
+onnxruntime
+scikit-learn
+pandas
