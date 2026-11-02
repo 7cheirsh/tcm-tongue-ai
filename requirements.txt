@@ -6,4 +6,5 @@ onnxruntime
 scikit-learn
 pandas
 zhipuai
-sniffio
+streamlit-webrtc
+av
