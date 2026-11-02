@@ -70,38 +70,48 @@ def check_image_quality(image):
             img_array = img_array[:, :, :3]
         gray = np.dot(img_array[..., :3], [0.299, 0.587, 0.114])
         brightness = np.mean(gray)
-        if brightness < 80: issues.append("⚠️ 光线太暗，请确保在充足自然光下拍摄")
-        elif brightness > 230: issues.append("⚠️ 光线太亮/过曝，请避免强光直射")
+        if brightness < 80: 
+            issues.append("⚠️ 光线太暗，请确保在充足自然光下拍摄")
+        elif brightness > 230: 
+            issues.append("⚠️ 光线太亮/过曝，请避免强光直射")
         if CV2_AVAILABLE:
             try:
                 gray_uint8 = np.clip(gray, 0, 255).astype(np.uint8)
                 laplacian = cv2.Laplacian(gray_uint8, cv2.CV_64F)
                 blur_score = np.var(laplacian)
-                if blur_score < 50: issues.append("⚠️ 画面模糊，请保持手机稳定并对焦舌体")
-                elif blur_score < 100: issues.append("⚠️ 画面略模糊，建议拍摄更清晰的照片")
-            except Exception: pass
+                if blur_score < 50: 
+                    issues.append("⚠️ 画面模糊，请保持手机稳定并对焦舌体")
+                elif blur_score < 100: 
+                    issues.append("⚠️ 画面略模糊，建议拍摄更清晰的照片")
+            except Exception: 
+                pass
         r, g, b = img_array[:, :, 0], img_array[:, :, 1], img_array[:, :, 2]
         max_rgb = np.maximum(np.maximum(r, g), b)
         min_rgb = np.minimum(np.minimum(r, g), b)
         sat = np.where(max_rgb > 0, (max_rgb - min_rgb) / max_rgb, 0)
-        if np.mean(sat) > 0.65: issues.append("⚠️ 颜色饱和度异常，请关闭美颜/滤镜功能")
+        if np.mean(sat) > 0.65: 
+            issues.append("⚠️ 颜色饱和度异常，请关闭美颜/滤镜功能")
         gray_flat = gray.flatten()
         sorted_gray = np.sort(gray_flat)
         lower_bound = sorted_gray[int(len(sorted_gray) * 0.3)]
         upper_bound = sorted_gray[int(len(sorted_gray) * 0.7)]
         tongue_mask = (gray >= lower_bound) & (gray <= upper_bound)
         tongue_ratio = np.sum(tongue_mask) / gray.size
-        if tongue_ratio < 0.15: issues.append("⚠️ 舌体占比过小，请靠近拍摄")
-        elif tongue_ratio > 0.75: issues.append("⚠️ 画面过满，请适当拉远")
+        if tongue_ratio < 0.15: 
+            issues.append("⚠️ 舌体占比过小，请靠近拍摄")
+        elif tongue_ratio > 0.75: 
+            issues.append("⚠️ 画面过满，请适当拉远")
         high_threshold = np.percentile(gray, 98)
-        if np.sum(gray > high_threshold) / gray.size > 0.05: issues.append("⚠️ 检测到反光区域，请避开光源直射")
+        if np.sum(gray > high_threshold) / gray.size > 0.05: 
+            issues.append("⚠️ 检测到反光区域，请避开光源直射")
     except Exception:
         return True, []
     return len(issues) == 0, issues
 
 # ===== 色彩校正功能 =====
 def advanced_color_correction(image):
-    if not CV2_AVAILABLE: return image
+    if not CV2_AVAILABLE: 
+        return image
     try:
         img_array = np.array(image).astype(np.float32)
         r_avg, g_avg, b_avg = img_array[:, :, 0].mean(), img_array[:, :, 1].mean(), img_array[:, :, 2].mean()
@@ -113,15 +123,18 @@ def advanced_color_correction(image):
         img_array[:, :, 1] = np.clip(img_array[:, :, 1] * g_gain, 0, 255)
         img_array[:, :, 2] = np.clip(img_array[:, :, 2] * b_gain, 0, 255)
         return Image.fromarray(img_array.astype(np.uint8))
-    except Exception: return image
+    except Exception: 
+        return image
 
 # ===== 舌苔舌质分离功能 =====
 def separate_tongue_coating(image):
-    if not CV2_AVAILABLE: return image, image, 0.5, "无法分离"
+    if not CV2_AVAILABLE: 
+        return image, image, 0.5, "无法分离"
     try:
         img_array = np.array(image.convert("RGB"))
         H, W = img_array.shape[:2]
-        if H < 5 or W < 5: return image, image, 0.5, "尺寸异常"
+        if H < 5 or W < 5: 
+            return image, image, 0.5, "尺寸异常"
         hsv = cv2.cvtColor(img_array, cv2.COLOR_RGB2HSV)
         h_ch, s_ch, v_ch = cv2.split(hsv)
         _, mask_s = cv2.threshold(s_ch, 30, 255, cv2.THRESH_BINARY)
@@ -130,7 +143,8 @@ def separate_tongue_coating(image):
         k = np.ones((5, 5), np.uint8)
         tongue_mask = cv2.morphologyEx(tongue_mask, cv2.MORPH_CLOSE, k)
         tongue_mask = cv2.morphologyEx(tongue_mask, cv2.MORPH_OPEN, k)
-        if np.sum(tongue_mask > 0) < 0.2 * H * W: tongue_mask = np.full((H, W), 255, dtype=np.uint8)
+        if np.sum(tongue_mask > 0) < 0.2 * H * W: 
+            tongue_mask = np.full((H, W), 255, dtype=np.uint8)
         v_tongue = v_ch.copy()
         v_tongue[tongue_mask == 0] = 0
         _, coating_bin = cv2.threshold(v_tongue, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -141,6 +155,7 @@ def separate_tongue_coating(image):
         coating_mask = cv2.morphologyEx(coating_mask, cv2.MORPH_CLOSE, k2)
         body_mask = cv2.morphologyEx(body_mask, cv2.MORPH_OPEN, k2)
         body_mask = cv2.morphologyEx(body_mask, cv2.MORPH_CLOSE, k2)
+        
         def overlay(color_rgb, mask):
             base = img_array.astype(np.float32)
             color_layer = np.zeros_like(base)
@@ -150,28 +165,42 @@ def separate_tongue_coating(image):
             out = base * (1 - alpha) + color_layer * alpha
             out[mask == 0] = 0
             return Image.fromarray(out.astype(np.uint8))
+            
         coating_img = overlay([0, 200, 0], coating_mask)
         body_img = overlay([220, 40, 40], body_mask)
         total = int(np.sum(tongue_mask > 0))
         coat_px = int(np.sum(coating_mask > 0))
         coating_ratio = float(min(0.95, max(0.05, coat_px / total if total > 0 else 0.5)))
+        
         if coat_px > 100:
             c_rgb = img_array[coating_mask > 0]
             mr, mg, mb = c_rgb[:, 0].mean(), c_rgb[:, 1].mean(), c_rgb[:, 2].mean()
-            if mr > mg + 20 and mr > mb + 20: coating_color = "偏黄"
-            elif mg > mr + 10 and mg > mb + 10: coating_color = "偏白"
-            elif mb > mg + 15 and mb > mr + 15: coating_color = "偏灰"
-            else: coating_color = "薄白"
-        else: coating_color = "较少或无"
+            if mr > mg + 20 and mr > mb + 20: 
+                coating_color = "偏黄"
+            elif mg > mr + 10 and mg > mb + 10: 
+                coating_color = "偏白"
+            elif mb > mg + 15 and mb > mr + 15: 
+                coating_color = "偏灰"
+            else: 
+                coating_color = "薄白"
+        else: 
+            coating_color = "较少或无"
+            
         if np.sum(body_mask > 0) > 100:
             b_rgb = img_array[body_mask > 0]
             br, bg, bb = b_rgb[:, 0].mean(), b_rgb[:, 1].mean(), b_rgb[:, 2].mean()
-            if br > bg * 1.2 and br > bb * 1.2: body_color = "偏红"
-            elif br < bg * 0.85 and br < bb * 0.85: body_color = "偏淡/偏白"
-            else: body_color = "淡红"
-        else: body_color = "无法判断"
+            if br > bg * 1.2 and br > bb * 1.2: 
+                body_color = "偏红"
+            elif br < bg * 0.85 and br < bb * 0.85: 
+                body_color = "偏淡/偏白"
+            else: 
+                body_color = "淡红"
+        else: 
+            body_color = "无法判断"
+            
         return coating_img, body_img, coating_ratio, f"舌苔：{coating_color}，覆盖比例 {coating_ratio*100:.1f}%；舌质：{body_color}"
-    except Exception as e: return image, image, 0.5, f"分离失败: {str(e)}"
+    except Exception as e: 
+        return image, image, 0.5, f"分离失败: {str(e)}"
 
 # ---------- 辨证提示和智能建议映射 ----------
 DIAGNOSIS_MAP = {
@@ -190,9 +219,11 @@ def extract_tongue_color_features(image, coating_ratio=None, coating_description
         crop_size = max(10, min(h_img, w_img) // 3)
         cy, cx = h_img // 2, w_img // 2
         center = img_array[cy - crop_size // 2: cy + crop_size // 2, cx - crop_size // 2: cx + crop_size // 2]
-        if center.size == 0: return "Thin-White", 0.75, {"错误": "空"}
+        if center.size == 0: 
+            return "Thin-White", 0.75, {"错误": "空"}
         r, g, b = np.mean(center[:, :, 0]), np.mean(center[:, :, 1]), np.mean(center[:, :, 2])
-        if np.isnan(r) or np.isnan(g) or np.isnan(b): return "Thin-White", 0.75, {"错误": "NaN"}
+        if np.isnan(r) or np.isnan(g) or np.isnan(b): 
+            return "Thin-White", 0.75, {"错误": "NaN"}
         brightness = 0.299 * r + 0.587 * g + 0.114 * b
         hue, sat, val = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
         uniformity = (np.std(center[:, :, 0]) + np.std(center[:, :, 1]) + np.std(center[:, :, 2])) / 3
@@ -202,21 +233,30 @@ def extract_tongue_color_features(image, coating_ratio=None, coating_description
         if coating_ratio is not None and coating_ratio < 0.08:
             tongue_type, confidence = "Mirror-Approximated", 0.94
         elif coating_ratio is not None and coating_ratio > 0.35:
-            if yellow_ratio > 10 and sat > 0.45: tongue_type, confidence = "Yellow-Greasy", 0.91
-            elif sat > 0.25 and brightness < 180: tongue_type, confidence = "White-Greasy", 0.89
-            elif brightness > 210 and sat < 0.15: tongue_type, confidence = "Mirror-Approximated", 0.92
-            elif brightness < 90: tongue_type, confidence = "Grey-Black", 0.90
-            else: tongue_type, confidence = "Thin-White", 0.80
-        elif yellow_ratio > 12 and sat > 0.48: tongue_type, confidence = "Yellow-Greasy", 0.89
-        elif sat > 0.28 and 110 < brightness < 170: tongue_type, confidence = "White-Greasy", 0.87
-        else: tongue_type, confidence = "Thin-White", 0.82
-        
+            if yellow_ratio > 10 and sat > 0.45: 
+                tongue_type, confidence = "Yellow-Greasy", 0.91
+            elif sat > 0.25 and brightness < 180: 
+                tongue_type, confidence = "White-Greasy", 0.89
+            elif brightness > 210 and sat < 0.15: 
+                tongue_type, confidence = "Mirror-Approximated", 0.92
+            elif brightness < 90: 
+                tongue_type, confidence = "Grey-Black", 0.90
+            else: 
+                tongue_type, confidence = "Thin-White", 0.80
+        elif yellow_ratio > 12 and sat > 0.48: 
+            tongue_type, confidence = "Yellow-Greasy", 0.89
+        elif sat > 0.28 and 110 < brightness < 170: 
+            tongue_type, confidence = "White-Greasy", 0.87
+        else: 
+            tongue_type, confidence = "Thin-White", 0.82
+            
         feature_info = {"亮度": round(brightness, 2), "饱和度": round(sat, 2), "色调": round(hue, 2), "均匀度": round(uniformity, 2), "黄色指数": round(yellow_ratio, 2)}
         if coating_ratio is not None:
             feature_info["舌苔覆盖比例"] = round(coating_ratio * 100, 1)
             feature_info["舌苔分析"] = coating_description or "无"
         return tongue_type, round(max(0.75, min(0.98, confidence)), 2), feature_info
-    except Exception: return "Thin-White", 0.75, {}
+    except Exception: 
+        return "Thin-White", 0.75, {}
 
 # ==============================================
 # ========== 【ONNX 推理模块】 ==========
@@ -226,7 +266,8 @@ IMG_SIZE = 640
 @st.cache_resource
 def load_onnx_model():
     onnx_path = "yolov10n.onnx"
-    if not os.path.exists(onnx_path): raise FileNotFoundError("找不到 yolov10n.onnx")
+    if not os.path.exists(onnx_path): 
+        raise FileNotFoundError("找不到 yolov10n.onnx")
     session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
     return session, session.get_inputs()[0].name
 
@@ -235,11 +276,11 @@ class TongueVideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.conf_threshold = 0.35
         self.session, self.input_name = load_onnx_model()
-        self.latest_frame = None # 存储原始画面
+        self.latest_frame = None
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        self.latest_frame = img.copy() # 存下最干净的图用于分析
+        self.latest_frame = img.copy()
         
         h0, w0 = img.shape[:2]
         scale = min(IMG_SIZE / w0, IMG_SIZE / h0)
@@ -254,7 +295,8 @@ class TongueVideoProcessor(VideoProcessorBase):
         try:
             outputs = self.session.run(None, {self.input_name: blob})
             pred = np.squeeze(outputs[0])
-            if pred.ndim == 2 and pred.shape[0] < pred.shape[1]: pred = pred.T
+            if pred.ndim == 2 and pred.shape[0] < pred.shape[1]: 
+                pred = pred.T
             
             if pred.ndim == 2 and pred.shape[1] >= 5:
                 boxes_xywh = pred[:, :4]
@@ -269,7 +311,6 @@ class TongueVideoProcessor(VideoProcessorBase):
                     x2_orig, y2_orig = int((bx + bw_ / 2) / scale), int((by + bh_ / 2) / scale)
                     box_w, box_h = x2_orig - x1_orig, y2_orig - y1_orig
                     
-                    # 实时绿框：宽度 35%，高度 25%，下移 18%
                     new_w_box, new_h_box = int(box_w * 0.35), int(box_h * 0.25)
                     center_x, center_y = x1_orig + box_w // 2, y1_orig + box_h // 2 + int(box_h * 0.18)
                     x1_new, y1_new = max(0, center_x - new_w_box // 2), max(0, center_y - new_h_box // 2)
@@ -286,15 +327,18 @@ class TongueVideoProcessor(VideoProcessorBase):
                         if preview.size > 0:
                             img[10:110, 10:110] = cv2.resize(preview, (100, 100))
                             cv2.rectangle(img, (10, 10), (110, 110), (0, 255, 0), 2)
-                    except: pass
-        except Exception as e: print(f"[实时异常]: {e}")
+                    except: 
+                        pass
+        except Exception as e: 
+            print(f"[实时异常]: {e}")
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 def onnx_detect(image_path, conf_thres=0.1, iou_thres=0.45):
     session, input_name = load_onnx_model()
     try:
         img = np.array(Image.open(image_path).convert('RGB'))[:, :, ::-1].copy()
-    except Exception: return []
+    except Exception: 
+        return []
     h0, w0 = img.shape[:2]
     scale = min(IMG_SIZE / w0, IMG_SIZE / h0)
     new_w, new_h = int(w0 * scale), int(h0 * scale)
@@ -306,8 +350,10 @@ def onnx_detect(image_path, conf_thres=0.1, iou_thres=0.45):
     blob = np.expand_dims(blob, axis=0)
     outputs = session.run(None, {input_name: blob})
     pred = np.squeeze(outputs[0])
-    if pred.ndim == 2 and pred.shape[0] < pred.shape[1]: pred = pred.T
-    if pred.ndim != 2 or pred.shape[1] < 5: return []
+    if pred.ndim == 2 and pred.shape[0] < pred.shape[1]: 
+        pred = pred.T
+    if pred.ndim != 2 or pred.shape[1] < 5: 
+        return []
     boxes_xywh, scores = pred[:, :4], pred[:, 4:]
     class_ids = np.argmax(scores, axis=1)
     conf = np.clip(np.max(scores, axis=1), 0.0, 1.0)
@@ -336,15 +382,16 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
                 corrected = advanced_color_correction(img)
                 if np.mean(np.abs(np.array(original_img).astype(np.float32) - np.array(corrected).astype(np.float32))) < 60:
                     img = corrected
-            except Exception: pass
+            except Exception: 
+                pass
 
         det_list = onnx_detect(image_path)
         best_conf = 0.0
         for _, conf, _ in det_list:
-            if conf > best_conf: best_conf = conf
+            if conf > best_conf: 
+                best_conf = conf
         best_conf = float(np.clip(best_conf, 0.0, 1.0))
 
-        # ==== 核心优化：根据来源判断裁剪方式 ====
         bw, bh = img.size
         cx1, cy1 = max(0, bw//2 - bw//3), max(0, bh//2 - bh//3)
         cx2, cy2 = min(bw, bw//2 + bw//3), min(bh, bh//2 + bh//3)
@@ -355,11 +402,9 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
             x1_orig, y1_orig, x2_orig, y2_orig = int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])
             
             if is_photo:
-                # 照片：原汁原味用大框
                 cx1, cy1 = max(0, x1_orig), max(0, y1_orig)
                 cx2, cy2 = min(bw, x2_orig), min(bh, y2_orig)
             else:
-                # 视频/抓拍：强制动态聚焦到嘴巴/舌头（防止衣服干扰）
                 box_w, box_h = x2_orig - x1_orig, y2_orig - y1_orig
                 new_w_box = int(box_w * 0.35)
                 new_h_box = int(box_h * 0.25)
@@ -371,28 +416,33 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
                 cx2 = min(bw, center_x + new_w_box // 2)
                 cy2 = min(bh, center_y + new_h_box // 2)
             
-            if cx2 <= cx1: cx2 = cx1 + 20
-            if cy2 <= cy1: cy2 = cy1 + 20
+            if cx2 <= cx1: 
+                cx2 = cx1 + 20
+            if cy2 <= cy1: 
+                cy2 = cy1 + 20
 
         cropped_img = img.crop((cx1, cy1, cx2, cy2))
-        # ==== 裁剪结束 ====
 
         coating_img_base64, body_img_base64 = None, None
         coating_ratio, coating_description = None, None
         if enable_coating_separation and CV2_AVAILABLE:
             coating_img, body_img, coating_ratio, coating_description = separate_tongue_coating(cropped_img)
-            buffered = BytesIO(); coating_img.save(buffered, format="PNG")
+            buffered = BytesIO()
+            coating_img.save(buffered, format="PNG")
             coating_img_base64 = base64.b64encode(buffered.getvalue()).decode()
-            buffered = BytesIO(); body_img.save(buffered, format="PNG")
+            buffered = BytesIO()
+            body_img.save(buffered, format="PNG")
             body_img_base64 = base64.b64encode(buffered.getvalue()).decode()
 
         tongue_type, confidence, feature_info = extract_tongue_color_features(cropped_img, coating_ratio, coating_description)
 
         draw_img = img.copy()
         ImageDraw.Draw(draw_img).rectangle([cx1, cy1, cx2, cy2], outline="#FF2200", width=6)
-        buffered = BytesIO(); draw_img.save(buffered, format="PNG")
+        buffered = BytesIO()
+        draw_img.save(buffered, format="PNG")
         boxed_image_base64 = base64.b64encode(buffered.getvalue()).decode()
-        buffered = BytesIO(); cropped_img.save(buffered, format="PNG")
+        buffered = BytesIO()
+        cropped_img.save(buffered, format="PNG")
         tongue_region_base64 = base64.b64encode(buffered.getvalue()).decode()
 
         diagnosis_info = DIAGNOSIS_MAP.get(tongue_type, {"诊断": "未知", "辩证提示": "无法判断", "智能建议": "请咨询医生"})
@@ -411,16 +461,19 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
         return None
 
 def analyze_video(video_path, sample_interval=10, max_frames=40, **kwargs):
-    if not CV2_AVAILABLE: return None
+    if not CV2_AVAILABLE: 
+        return None
     cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened(): return None
+    if not cap.isOpened(): 
+        return None
     session, input_name = load_onnx_model()
     progress = st.progress(0.0, text="正在逐帧检测...")
     frame_idx, best_conf, best_frame, detected_count, checked = 0, -1.0, None, 0, 0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     while True:
         ret, frame = cap.read()
-        if not ret: break
+        if not ret: 
+            break
         if frame_idx % sample_interval == 0:
             checked += 1
             h0, w0 = frame.shape[:2]
@@ -429,39 +482,50 @@ def analyze_video(video_path, sample_interval=10, max_frames=40, **kwargs):
             blob[:int(h0*scale), :int(w0*scale)] = cv2.resize(frame, (int(w0*scale), int(h0*scale)))
             blob = blob[:, :, ::-1].astype(np.float32).transpose(2, 0, 1)[None] / 255.0
             pred = np.squeeze(session.run(None, {input_name: blob})[0])
-            if pred.ndim == 2 and pred.shape[0] < pred.shape[1]: pred = pred.T
+            if pred.ndim == 2 and pred.shape[0] < pred.shape[1]: 
+                pred = pred.T
             if pred.ndim == 2 and pred.shape[1] >= 5:
                 conf = np.clip(np.max(pred[:, 4:], axis=1), 0.0, 1.0)
                 if len(conf) > 0:
                     max_c = float(np.max(conf))
                     if max_c > 0.1:
                         detected_count += 1
-                        if max_c > best_conf: best_conf, best_frame = max_c, frame.copy()
-            if checked >= max_frames or total_frames <= 0: break
+                        if max_c > best_conf: 
+                            best_conf, best_frame = max_c, frame.copy()
+            if checked >= max_frames or total_frames <= 0: 
+                break
             progress.progress(min(1.0, frame_idx / total_frames), text=f"已检测 {checked} 帧")
         frame_idx += 1
-    cap.release(); progress.progress(1.0, text="帧检测完成")
+    cap.release()
+    progress.progress(1.0, text="帧检测完成")
     if best_frame is None:
-        st.error("❌ 视频中未检测到清晰的舌体。"); return None
+        st.error("❌ 视频中未检测到清晰的舌体。")
+        return None
     best_path = f"video_best_{int(time.time())}.png"
     cv2.imwrite(best_path, best_frame)
     with st.spinner("正在对最佳帧进行舌象分析..."):
-        kwargs['is_photo'] = False  # 告诉函数这是视频，要用小框
+        kwargs['is_photo'] = False
         result = analyze_tongue(best_path, **kwargs)
-    if result: result.update({"视频检测信息": f"抽样 {checked} 帧 / 命中 {detected_count} 帧", "来源": "视频逐帧诊断"})
-    os.remove(best_path)
+    if result: 
+        result.update({"视频检测信息": f"抽样 {checked} 帧 / 命中 {detected_count} 帧", "来源": "视频逐帧诊断"})
+            os.remove(best_path)
     return result
 
 def save_history(history):
-    with open("tongue_history.json", "w", encoding="utf-8") as f: json.dump(history, f, ensure_ascii=False, indent=2)
+    with open("tongue_history.json", "w", encoding="utf-8") as f: 
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
 def load_history():
-        if os.path.exists("tongue_history.json"):
-        with open("tongue_history.json", "r", encoding="utf-8") as f: return json.load(f)
+    if os.path.exists("tongue_history.json"):
+        with open("tongue_history.json", "r", encoding="utf-8") as f: 
+            return json.load(f)
     return []
 
-def make_hashes(password): return hashlib.sha256(str.encode(password)).hexdigest()
-def check_hashes(password, hashed_text): return make_hashes(password) == hashed_text
+def make_hashes(password): 
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password, hashed_text): 
+    return make_hashes(password) == hashed_text
 
 def init_auth():
     if 'users' not in st.session_state:
@@ -488,6 +552,7 @@ def login_page():
                 username = st.text_input("用户名", key="login_username", placeholder="请输入用户名")
                 password = st.text_input("密码", type="password", key="login_password", placeholder="请输入密码")
                 st.markdown("<br>", unsafe_allow_html=True)
+                
                 if st.button("登 录", use_container_width=True):
                     if username in st.session_state['users'] and check_hashes(password, st.session_state['users'][username]):
                         st.session_state['logged_in'] = True
@@ -499,6 +564,7 @@ def login_page():
                 new_user = st.text_input("新用户名", key="reg_username", placeholder="请输入新用户名")
                 new_password = st.text_input("新密码", type="password", key="reg_password", placeholder="请设置密码")
                 st.markdown("<br>", unsafe_allow_html=True)
+                
                 if st.button("注 册", use_container_width=True):
                     if new_user in st.session_state['users']:
                         st.warning("用户已存在！")
@@ -510,17 +576,23 @@ def login_page():
             
             st.markdown("</div>", unsafe_allow_html=True)
 
+
 # ---------- 舌象分析页面 ----------
 def analysis_page():
     st.markdown("<h1>👅 智能舌象诊断</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color:#6B4C3C;'>上传舌部照片或视频，或开启摄像头实时检测，系统将基于YOLO模型精准定位舌体区域并给出中医辨证建议。</p>", unsafe_allow_html=True)
     st.markdown("---")
 
-    if "history" not in st.session_state: st.session_state.history = load_history()
-    if "current_result" not in st.session_state: st.session_state.current_result = None
-    if "upload_passed_quality" not in st.session_state: st.session_state.upload_passed_quality = False
-    if "current_temp_path" not in st.session_state: st.session_state.current_temp_path = None
-    if "captured_frame_path" not in st.session_state: st.session_state.captured_frame_path = None
+    if "history" not in st.session_state: 
+        st.session_state.history = load_history()
+    if "current_result" not in st.session_state: 
+        st.session_state.current_result = None
+    if "upload_passed_quality" not in st.session_state: 
+        st.session_state.upload_passed_quality = False
+    if "current_temp_path" not in st.session_state: 
+        st.session_state.current_temp_path = None
+    if "captured_frame_path" not in st.session_state: 
+        st.session_state.captured_frame_path = None
 
     # ====== 患者基本信息 ======
     st.markdown("<div class='diagnosis-card'>", unsafe_allow_html=True)
@@ -552,8 +624,10 @@ def analysis_page():
         """, unsafe_allow_html=True)
     with st.expander("⚙️ 高级分析设置（可选）"):
         col_set1, col_set2 = st.columns(2)
-        with col_set1: enable_color_correction = st.checkbox("🎨 自动色彩校正（白平衡）", value=True)
-        with col_set2: enable_coating_separation = st.checkbox("🔬 舌苔/舌质分离分析", value=True)
+        with col_set1: 
+            enable_color_correction = st.checkbox("🎨 自动色彩校正（白平衡）", value=True)
+        with col_set2: 
+            enable_coating_separation = st.checkbox("🔬 舌苔/舌质分离分析", value=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     upload_mode = st.radio(
@@ -614,7 +688,8 @@ def analysis_page():
         if st.session_state.current_temp_path != temp_path:
             st.session_state.upload_passed_quality = False
             st.session_state.current_temp_path = temp_path
-            with open(temp_path, "wb") as f: f.write(uploaded_file.getbuffer())
+            with open(temp_path, "wb") as f: 
+                f.write(uploaded_file.getbuffer())
             img = Image.open(temp_path).convert("RGB")
             is_qualified, issues = check_image_quality(img)
             if is_qualified:
@@ -623,8 +698,10 @@ def analysis_page():
             else:
                 st.session_state.upload_passed_quality = False
                 st.error("❌ 图像质量不符合要求，请重新拍摄/上传")
-                for issue in issues: st.warning(issue)
-                if os.path.exists(temp_path): os.remove(temp_path)
+                for issue in issues: 
+                    st.warning(issue)
+                if os.path.exists(temp_path): 
+                    os.remove(temp_path)
                 st.session_state.current_temp_path = None
 
         if st.session_state.upload_passed_quality and st.session_state.current_temp_path:
@@ -680,7 +757,8 @@ def analysis_page():
                                         messages=[{"role": "user", "content": [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]}]
                                     )
                                     st.markdown(resp.choices[0].message.content)
-                            except Exception as e: st.error(f"AI 解读失败: {e}")
+                            except Exception as e: 
+                                st.error(f"AI 解读失败: {e}")
 
                         col_dial, col_adv = st.columns(2)
                         with col_dial:
@@ -691,22 +769,27 @@ def analysis_page():
     # ====== 视频/摄像头分析执行 ======
     if uploaded_video is not None:
         video_path = f"temp_video_{int(time.time())}_{uploaded_video.name}"
-        with open(video_path, "wb") as f: f.write(uploaded_video.getbuffer())
+        with open(video_path, "wb") as f: 
+            f.write(uploaded_video.getbuffer())
 
     if video_path and os.path.exists(video_path):
         st.markdown("---")
         st.subheader("🎬 画面分析")
-        if uploaded_video is not None: st.video(video_path)
+        if uploaded_video is not None: 
+            st.video(video_path)
 
         col_v1, col_v2 = st.columns(2)
-        with col_v1: sample_interval = st.slider("帧抽样间隔", 1, 30, 10)
-        with col_v2: max_frames = st.slider("最多检测帧数", 10, 100, 40)
+        with col_v1: 
+            sample_interval = st.slider("帧抽样间隔", 1, 30, 10)
+        with col_v2: 
+            max_frames = st.slider("最多检测帧数", 10, 100, 40)
 
         if st.button("🎬 开始深度诊断", type="primary", use_container_width=True):
             if uploaded_video is None and video_path.endswith(".png"):
                 with st.spinner("正在分析抓拍画面..."):
                     result = analyze_tongue(video_path, enable_color_correction, enable_coating_separation, is_photo=False)
-                    if result: result["来源"] = "摄像头实时抓拍"
+                    if result: 
+                        result["来源"] = "摄像头实时抓拍"
             else:
                 result = analyze_video(video_path, sample_interval, max_frames, enable_color_correction=enable_color_correction, enable_coating_separation=enable_coating_separation)
                 
@@ -721,7 +804,8 @@ def analysis_page():
                 st.subheader("🔍 最佳帧检测定位结果")
                 st.image(f"data:image/png;base64,{result['boxed_image_base64']}", width=400)
                 st.caption(f"Conf: {result.get('人体检测置信度', 0):.2f}")
-                if "视频检测信息" in result: st.info(f"🎬 {result['视频检测信息']}")
+                if "视频检测信息" in result: 
+                    st.info(f"🎬 {result['视频检测信息']}")
 
                 st.subheader("✂️ 舌体区域特写")
                 st.image(f"data:image/png;base64,{result['tongue_region_base64']}", width=400)
@@ -749,8 +833,10 @@ def analysis_page():
                     st.markdown(f"<div style='background:#E3F2FD;padding:15px;border-radius:8px;'><h4 style='color:#1565C0;'>💡 智能建议</h4><p>{result['智能建议'].replace(chr(10), '<br>')}</p></div>", unsafe_allow_html=True)
 
         if uploaded_video is not None:
-            try: os.remove(video_path)
-            except Exception: pass
+            try: 
+                os.remove(video_path)
+            except Exception: 
+                pass
 
     # =========================================================
     # ====== 底部常驻：AI 医生智能对话窗口 ======
@@ -758,14 +844,17 @@ def analysis_page():
     st.markdown("---")
     st.subheader("💬 AI 医生智能问答")
     st.caption("你可以在这里继续追问关于诊断结果、中医养生等问题。")
-    if "chat_history" not in st.session_state: st.session_state.chat_history = []
+    if "chat_history" not in st.session_state: 
+        st.session_state.chat_history = []
 
     for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+        with st.chat_message(msg["role"]): 
+            st.markdown(msg["content"])
 
     if prompt := st.chat_input("向 AI 医生提问（例如：白腻苔平时吃什么好？）"):
         st.session_state.chat_history.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("user"): 
+            st.markdown(prompt)
 
         with st.chat_message("assistant"):
             with st.spinner("思考中..."):
@@ -781,7 +870,9 @@ def analysis_page():
                         ans = resp.choices[0].message.content
                         st.markdown(ans)
                         st.session_state.chat_history.append({"role": "assistant", "content": ans})
-                except Exception as e: st.error(f"AI 失败: {e}")
+                except Exception as e: 
+                    st.error(f"AI 失败: {e}")
+
 
 # ---------- 历史记录页面 ----------
 def history_page():
@@ -802,7 +893,19 @@ def history_page():
         st.metric("平均置信度", f"{avg_confidence*100:.1f}%")
     
     st.subheader("📜 历史记录列表")
-    table_data = [{"序号": idx + 1, "时间": r.get("时间", ""), "来源": r.get("来源", "照片诊断"), "性别": r.get("性别", ""), "年龄": f"{r.get('年龄', '')}岁", "BMI": r.get("BMI", ""), "舌象类型": r.get("舌象类型", ""), "诊断": r.get("诊断", ""), "置信度": f"{r.get('置信度', 0)*100:.1f}%"} for idx, r in enumerate(history)]
+    table_data = []
+    for idx, r in enumerate(history):
+        table_data.append({
+            "序号": idx + 1, 
+            "时间": r.get("时间", ""), 
+            "来源": r.get("来源", "照片诊断"), 
+            "性别": r.get("性别", ""), 
+            "年龄": f"{r.get('年龄', '')}岁", 
+            "BMI": r.get("BMI", ""), 
+            "舌象类型": r.get("舌象类型", ""), 
+            "诊断": r.get("诊断", ""), 
+            "置信度": f"{r.get('置信度', 0)*100:.1f}%"
+        })
     st.dataframe(pd.DataFrame(table_data), hide_index=True, use_container_width=True)
     
     st.subheader("🔍 回顾详细记录")
@@ -818,17 +921,24 @@ def history_page():
                 st.info(f"BMI：{r.get('BMI')} ({r.get('体型')})")
                 st.info(f"来源：{r.get('来源', '照片诊断')}")
                 st.info(f"舌象：{r.get('舌象类型')} | 诊断：{r.get('诊断')}")
-                if '舌苔分离分析' in r: st.info(f"细节：{r.get('舌苔分离分析')}")
+                if '舌苔分离分析' in r: 
+                    st.info(f"细节：{r.get('舌苔分离分析')}")
             with c2:
                 if "tongue_region_base64" in r:
                     st.image(Image.open(BytesIO(base64.b64decode(r["tongue_region_base64"]))), width=250)
                 if 'coating_img_base64' in r:
                     col_show1, col_show2 = st.columns(2)
-                    with col_show1: st.image(Image.open(BytesIO(base64.b64decode(r["coating_img_base64"]))), caption="舌苔(绿)", width=120)
-                    with col_show2: st.image(Image.open(BytesIO(base64.b64decode(r["body_img_base64"]))), caption="舌质(红)", width=120)
-            with st.expander("🧠 辩证提示"): st.write(r.get("辩证提示"))
-            with st.expander("💡 智能建议"): st.write(r.get("智能建议"))
-            with st.expander("🔬 详细特征信息"): st.json(r.get("特征信息", {}))
+                    with col_show1: 
+                        st.image(Image.open(BytesIO(base64.b64decode(r["coating_img_base64"]))), caption="舌苔(绿)", width=120)
+                    with col_show2: 
+                        st.image(Image.open(BytesIO(base64.b64decode(r["body_img_base64"]))), caption="舌质(红)", width=120)
+            with st.expander("🧠 辩证提示"): 
+                st.write(r.get("辩证提示"))
+            with st.expander("💡 智能建议"): 
+                st.write(r.get("智能建议"))
+            with st.expander("🔬 详细特征信息"): 
+                st.json(r.get("特征信息", {}))
+
 
 # ---------- 主应用 ----------
 def main():
@@ -837,6 +947,7 @@ def main():
     if not st.session_state['logged_in']:
         login_page()
         return
+        
     with st.sidebar:
         st.markdown(f"<h2 style='color:#5E3A2C;'>👤 {st.session_state['username']}</h2>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
@@ -846,6 +957,7 @@ def main():
             st.session_state['logged_in'] = False
             st.session_state['username'] = ""
             st.rerun()
+            
     if page == "👅 舌象分析":
         analysis_page()
     else:
