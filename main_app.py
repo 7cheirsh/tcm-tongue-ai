@@ -344,7 +344,7 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
             if conf > best_conf: best_conf = conf
         best_conf = float(np.clip(best_conf, 0.0, 1.0))
 
-        # ==== 核心优化：动态聚焦截取（照片框保持原大小，不变） ====
+        # ==== 核心优化：原汁原味使用 YOLO 识别出来的框 ====
         bw, bh = img.size
         cx1, cy1 = max(0, bw//2 - bw//3), max(0, bh//2 - bh//3)
         cx2, cy2 = min(bw, bw//2 + bw//3), min(bh, bh//2 + bh//3)
@@ -352,26 +352,18 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
         if best_conf > 0.1 and len(det_list) > 0:
             best_idx = np.argmax([d[1] for d in det_list])
             xyxy = det_list[best_idx][2]
-            x1_orig, y1_orig, x2_orig, y2_orig = int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])
             
-            box_w, box_h = x2_orig - x1_orig, y2_orig - y1_orig
+            cx1 = max(0, int(xyxy[0]))
+            cy1 = max(0, int(xyxy[1]))
+            cx2 = min(bw, int(xyxy[2]))
+            cy2 = min(bh, int(xyxy[3]))
             
-            # 照片显示框：宽度 40%，高度 30%，下移 15%
-            new_w_box = int(box_w * 0.4)
-            new_h_box = int(box_h * 0.3)
-            center_x = x1_orig + box_w // 2
-            center_y = y1_orig + box_h // 2 + int(box_h * 0.15)
-            
-            cx1 = max(0, center_x - new_w_box // 2)
-            cy1 = max(0, center_y - new_h_box // 2)
-            cx2 = min(bw, center_x + new_w_box // 2)
-            cy2 = min(bh, center_y + new_h_box // 2)
-            
+            # 防止模型给出的框越界报错
             if cx2 <= cx1: cx2 = cx1 + 20
             if cy2 <= cy1: cy2 = cy1 + 20
 
         cropped_img = img.crop((cx1, cy1, cx2, cy2))
-        # ==== 动态聚焦截取结束 ====
+        # ==== 裁剪结束 ====
 
         coating_img_base64, body_img_base64 = None, None
         coating_ratio, coating_description = None, None
@@ -584,21 +576,19 @@ def analysis_page():
             st.markdown("---")
             
             if st.button("📸 定格画面并进行深度辨证分析", type="primary", use_container_width=True):
-                # 核心修复：直接从处理器实例拿干净的原图
                 if ctx.video_processor is not None:
                     latest_img = getattr(ctx.video_processor, "latest_frame", None)
                     if latest_img is not None:
                         temp_cap_path = f"temp_cap_{int(time.time())}.png"
                         cv2.imwrite(temp_cap_path, latest_img)
                         st.session_state.captured_frame_path = temp_cap_path
-                        ctx.video_processor.latest_frame = None # 清空缓存
+                        ctx.video_processor.latest_frame = None
                         st.rerun()
                     else:
                         st.warning("还没收到画面数据，请稍等 1-2 秒再点，或检查摄像头是否在播放。")
                 else:
                     st.warning("摄像头未启动或已被关闭，请先点击 START。")
 
-            # 展示定格结果
             if st.session_state.captured_frame_path and os.path.exists(st.session_state.captured_frame_path):
                 st.success("✅ 成功定格画面！请点击下方按钮进行深度分析。")
                 img = Image.open(st.session_state.captured_frame_path)
@@ -663,7 +653,6 @@ def analysis_page():
                                 st.info(f"📊 {result['舌苔分离分析']}")
                                 st.error(f"📌 最终判定：{result['舌象类型']} (置信度 {result['置信度'] * 100:.1f}%)")
 
-                        # AI 解读
                         st.markdown("---")
                         st.markdown("<h3>🤖 AI 舌象智能解读</h3>", unsafe_allow_html=True)
                         with st.spinner("大模型深度解读中..."):
