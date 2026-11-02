@@ -327,7 +327,7 @@ def onnx_detect(image_path, conf_thres=0.1, iou_thres=0.45):
                 det_list.append((int(class_ids[i]), float(conf[i]), xyxy[i].tolist()))
     return det_list
 
-def analyze_tongue(image_path, enable_color_correction=True, enable_coating_separation=True):
+def analyze_tongue(image_path, enable_color_correction=True, enable_coating_separation=True, is_photo=True):
     try:
         img = Image.open(image_path).convert("RGB")
         original_img = img.copy()
@@ -344,7 +344,7 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
             if conf > best_conf: best_conf = conf
         best_conf = float(np.clip(best_conf, 0.0, 1.0))
 
-        # ==== 核心优化：原汁原味使用 YOLO 识别出来的框 ====
+        # ==== 核心优化：根据来源判断裁剪方式 ====
         bw, bh = img.size
         cx1, cy1 = max(0, bw//2 - bw//3), max(0, bh//2 - bh//3)
         cx2, cy2 = min(bw, bw//2 + bw//3), min(bh, bh//2 + bh//3)
@@ -352,13 +352,25 @@ def analyze_tongue(image_path, enable_color_correction=True, enable_coating_sepa
         if best_conf > 0.1 and len(det_list) > 0:
             best_idx = np.argmax([d[1] for d in det_list])
             xyxy = det_list[best_idx][2]
+            x1_orig, y1_orig, x2_orig, y2_orig = int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])
             
-            cx1 = max(0, int(xyxy[0]))
-            cy1 = max(0, int(xyxy[1]))
-            cx2 = min(bw, int(xyxy[2]))
-            cy2 = min(bh, int(xyxy[3]))
+            if is_photo:
+                # 照片：原汁原味用大框
+                cx1, cy1 = max(0, x1_orig), max(0, y1_orig)
+                cx2, cy2 = min(bw, x2_orig), min(bh, y2_orig)
+            else:
+                # 视频/抓拍：强制动态聚焦到嘴巴/舌头（防止衣服干扰）
+                box_w, box_h = x2_orig - x1_orig, y2_orig - y1_orig
+                new_w_box = int(box_w * 0.35)
+                new_h_box = int(box_h * 0.25)
+                center_x = x1_orig + box_w // 2
+                center_y = y1_orig + box_h // 2 + int(box_h * 0.18)
+                
+                cx1 = max(0, center_x - new_w_box // 2)
+                cy1 = max(0, center_y - new_h_box // 2)
+                cx2 = min(bw, center_x + new_w_box // 2)
+                cy2 = min(bh, center_y + new_h_box // 2)
             
-            # 防止模型给出的框越界报错
             if cx2 <= cx1: cx2 = cx1 + 20
             if cy2 <= cy1: cy2 = cy1 + 20
 
@@ -434,6 +446,7 @@ def analyze_video(video_path, sample_interval=10, max_frames=40, **kwargs):
     best_path = f"video_best_{int(time.time())}.png"
     cv2.imwrite(best_path, best_frame)
     with st.spinner("正在对最佳帧进行舌象分析..."):
+        kwargs['is_photo'] = False  # 告诉函数这是视频，要用小框
         result = analyze_tongue(best_path, **kwargs)
     if result: result.update({"视频检测信息": f"抽样 {checked} 帧 / 命中 {detected_count} 帧", "来源": "视频逐帧诊断"})
     os.remove(best_path)
@@ -443,7 +456,7 @@ def save_history(history):
     with open("tongue_history.json", "w", encoding="utf-8") as f: json.dump(history, f, ensure_ascii=False, indent=2)
 
 def load_history():
-    if os.path.exists("tongue_history.json"):
+        if os.path.exists("tongue_history.json"):
         with open("tongue_history.json", "r", encoding="utf-8") as f: return json.load(f)
     return []
 
@@ -692,7 +705,7 @@ def analysis_page():
         if st.button("🎬 开始深度诊断", type="primary", use_container_width=True):
             if uploaded_video is None and video_path.endswith(".png"):
                 with st.spinner("正在分析抓拍画面..."):
-                    result = analyze_tongue(video_path, enable_color_correction, enable_coating_separation)
+                    result = analyze_tongue(video_path, enable_color_correction, enable_coating_separation, is_photo=False)
                     if result: result["来源"] = "摄像头实时抓拍"
             else:
                 result = analyze_video(video_path, sample_interval, max_frames, enable_color_correction=enable_color_correction, enable_coating_separation=enable_coating_separation)
