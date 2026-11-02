@@ -507,13 +507,20 @@ def analyze_video(video_path, sample_interval=10, max_frames=40, **kwargs):
         kwargs['is_photo'] = False
         result = analyze_tongue(best_path, **kwargs)
     if result: 
-        result.update({"视频检测信息": f"抽样 {checked} 帧 / 命中 {detected_count} 帧", "来源": "视频逐帧诊断"})
-            os.remove(best_path)
+                result.update({"视频检测信息": f"抽样 {checked} 帧 / 命中 {detected_count} 帧", "来源": "视频逐帧诊断"})
+    
+    try:
+        os.remove(best_path)
+    except Exception:
+        pass
+        
     return result
+
 
 def save_history(history):
     with open("tongue_history.json", "w", encoding="utf-8") as f: 
         json.dump(history, f, ensure_ascii=False, indent=2)
+
 
 def load_history():
     if os.path.exists("tongue_history.json"):
@@ -521,11 +528,14 @@ def load_history():
             return json.load(f)
     return []
 
+
 def make_hashes(password): 
     return hashlib.sha256(str.encode(password)).hexdigest()
 
+
 def check_hashes(password, hashed_text): 
     return make_hashes(password) == hashed_text
+
 
 def init_auth():
     if 'users' not in st.session_state:
@@ -533,6 +543,7 @@ def init_auth():
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
         st.session_state['username'] = ""
+
 
 def login_page():
     st.markdown("<h1 style='text-align: center;'>🔐 舌象诊断 · 专属登录</h1>", unsafe_allow_html=True)
@@ -962,6 +973,7 @@ def main():
         analysis_page()
     else:
         history_page()
+
 
 if __name__ == '__main__':
     main()
